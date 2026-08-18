@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/mbox_bg"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:paddingLeft="72dp"
+        android:paddingTop="40dp"
+        android:paddingRight="72dp"
+        android:paddingBottom="40dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="MBOX TV"
+            android:textColor="@color/mbox_text"
+            android:textSize="34sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/settings_title"
+            android:textColor="@color/mbox_muted"
+            android:textSize="20sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:text="@string/tv_url"
+            android:textColor="@color/mbox_text"
+            android:textSize="18sp" />
+
+        <EditText
+            android:id="@+id/urlEdit"
+            android:layout_width="match_parent"
+            android:layout_height="58dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/field_bg"
+            android:hint="http://192.168.1.50/tv/player"
+            android:inputType="textUri"
+            android:singleLine="true"
+            android:textColor="@color/mbox_text"
+            android:textColorHint="#7F8793"
+            android:textSize="18sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:text="Лого при свързване"
+            android:textColor="@color/mbox_text"
+            android:textSize="18sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/chooseLogoButton"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp"
+                android:focusable="true"
+                android:text="@string/choose_logo" />
+
+            <Button
+                android:id="@+id/resetLogoButton"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp"
+                android:layout_marginLeft="14dp"
+                android:focusable="true"
+                android:text="@string/reset_logo" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/logoStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="7dp"
+            android:text="Стандартно MBOX TV лого"
+            android:textColor="@color/mbox_muted"
+            android:textSize="15sp" />
+
+        <CheckBox
+            android:id="@+id/autoStartCheck"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:checked="true"
+            android:focusable="true"
+            android:text="@string/autostart"
+            android:textColor="@color/mbox_text"
+            android:textSize="17sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="@string/pin_label"
+            android:textColor="@color/mbox_text"
+            android:textSize="18sp" />
+
+        <EditText
+            android:id="@+id/pinEdit"
+            android:layout_width="260dp"
+            android:layout_height="56dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/field_bg"
+            android:hint="1234"
+            android:inputType="numberPassword"
+            android:maxLength="8"
+            android:singleLine="true"
+            android:textColor="@color/mbox_text"
+            android:textColorHint="#7F8793"
+            android:textSize="18sp" />
+
+        <Button
+            android:id="@+id/saveButton"
+            android:layout_width="360dp"
+            android:layout_height="64dp"
+            android:layout_marginTop="28dp"
+            android:focusable="true"
+            android:text="@string/save_start"
+            android:textSize="18sp" />
+
+        <Button
+            android:id="@+id/homeSettingsButton"
+            android:layout_width="430dp"
+            android:layout_height="60dp"
+            android:layout_marginTop="14dp"
+            android:focusable="true"
+            android:text="@string/home_mode"
+            android:textSize="15sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="За най-надежден автоматичен старт на постоянен TV Box избери MBOX TV като Home/Launcher. Настройките се отварят и със задържане на BACK за 3 секунди."
+            android:textColor="@color/mbox_muted"
+            android:textSize="14sp" />
+    </LinearLayout>
+</ScrollView>
