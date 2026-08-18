@@ -126,6 +126,7 @@ public class SetupActivity extends Activity {
         Prefs.setAutostart(this, autoStartCheck.isChecked());
         Prefs.setIframeMode(this, iframeModeCheck.isChecked());
         Prefs.setManualExit(this, false);
+        Prefs.markSetupShownForCurrentVersion(this);
         return true;
     }
 

@@ -11,6 +11,8 @@ public final class Prefs {
     private static final String KEY_PIN = "settings_pin";
     private static final String KEY_IFRAME_MODE = "iframe_mode";
     private static final String KEY_MANUAL_EXIT = "manual_exit";
+    private static final String KEY_SETUP_REVISION = "setup_revision";
+    public static final int CURRENT_SETUP_REVISION = 5;
 
     private Prefs() {}
 
@@ -35,4 +37,12 @@ public final class Prefs {
 
     public static boolean getManualExit(Context c) { return p(c).getBoolean(KEY_MANUAL_EXIT, false); }
     public static void setManualExit(Context c, boolean value) { p(c).edit().putBoolean(KEY_MANUAL_EXIT, value).apply(); }
+
+    public static boolean needsSetupAfterUpdate(Context c) {
+        return p(c).getInt(KEY_SETUP_REVISION, 0) < CURRENT_SETUP_REVISION;
+    }
+
+    public static void markSetupShownForCurrentVersion(Context c) {
+        p(c).edit().putInt(KEY_SETUP_REVISION, CURRENT_SETUP_REVISION).apply();
+    }
 }

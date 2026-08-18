@@ -39,7 +39,9 @@ public class MainActivity extends Activity {
         }
 
         Intent intent;
-        if (Prefs.getUrl(this).trim().isEmpty()) {
+        // Show Setup once after every app update. Existing values are preserved
+        // and pre-filled, so the user can confirm/change the TV address.
+        if (Prefs.getUrl(this).trim().isEmpty() || Prefs.needsSetupAfterUpdate(this)) {
             intent = new Intent(this, SetupActivity.class);
         } else {
             intent = new Intent(this, PlayerActivity.class);
