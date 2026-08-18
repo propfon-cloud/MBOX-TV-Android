@@ -45,7 +45,7 @@
             android:layout_height="58dp"
             android:layout_marginTop="8dp"
             android:background="@drawable/field_bg"
-            android:hint="http://192.168.1.50/tv/player"
+            android:hint="http://192.168.1.117/tv/"
             android:inputType="textUri"
             android:singleLine="true"
             android:textColor="@color/mbox_text"

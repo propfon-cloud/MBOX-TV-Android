@@ -15,7 +15,11 @@ import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -32,6 +36,7 @@ import java.util.concurrent.Executors;
 public class PlayerActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
     private static final long RETRY_MS = 1500;
     private static final long SETTINGS_HOLD_MS = 3000;
 
@@ -40,6 +45,7 @@ public class PlayerActivity extends Activity {
     private ImageView customLogo;
     private TextView defaultLogo;
     private TextView connectText;
+
     private boolean pageLoaded = false;
     private boolean destroyed = false;
     private boolean backHeldTriggered = false;
@@ -78,24 +84,115 @@ public class PlayerActivity extends Activity {
         s.setDisplayZoomControls(false);
         s.setSupportZoom(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        s.setJavaScriptCanOpenWindowsAutomatically(true);
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+
+        CookieManager cookies = CookieManager.getInstance();
+        cookies.setAcceptCookie(true);
+        cookies.setAcceptThirdPartyCookies(webView, true);
 
         webView.setBackgroundColor(Color.BLACK);
+        webView.setHorizontalScrollBarEnabled(false);
+        webView.setVerticalScrollBarEnabled(false);
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        webView.setFocusable(true);
+        webView.setFocusableInTouchMode(true);
+
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                connectText.setText("Зареждане…");
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
-                pageLoaded = true;
-                connectOverlay.setVisibility(View.GONE);
-                webView.setVisibility(View.VISIBLE);
+                super.onPageFinished(view, url);
+                CookieManager.getInstance().flush();
+                scheduleAutoPlayAttempts();
                 immersive();
             }
 
             @Override
-            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                if (!pageLoaded) {
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (request != null && request.isForMainFrame()) {
+                    pageLoaded = false;
                     showConnecting("Връзката прекъсна. Нов опит…");
-                    handler.postDelayed(PlayerActivity.this::startSmartConnection, RETRY_MS);
+                    handler.postDelayed(PlayerActivity.this::reloadFromStart, RETRY_MS);
                 }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+                super.onReceivedHttpError(view, request, errorResponse);
+                if (request != null && request.isForMainFrame() && errorResponse != null
+                        && errorResponse.getStatusCode() >= 400) {
+                    pageLoaded = false;
+                    showConnecting("Сървърът отговори " + errorResponse.getStatusCode() + ". Нов опит…");
+                    handler.postDelayed(PlayerActivity.this::reloadFromStart, 2500);
+                }
+            }
+        });
+    }
+
+    /**
+     * The legacy /tv/player page expects a browser fullscreen click. MBOX TV is already
+     * a fullscreen Android application, so we make the player visible and start HTML5
+     * video directly. We also keep a MutationObserver + timer inside the page so this
+     * survives redirects, slow PHP rendering and schedule/player DOM updates.
+     */
+    private void scheduleAutoPlayAttempts() {
+        handler.postDelayed(this::injectAutoPlay, 100);
+        handler.postDelayed(this::injectAutoPlay, 500);
+        handler.postDelayed(this::injectAutoPlay, 1200);
+        handler.postDelayed(this::injectAutoPlay, 2500);
+        handler.postDelayed(this::injectAutoPlay, 5000);
+    }
+
+    private void injectAutoPlay() {
+        if (destroyed || webView == null) return;
+
+        String script =
+                "(function(){" +
+                "try{" +
+                "if(!window.__MBOX_TV_V2_INSTALLED){" +
+                "window.__MBOX_TV_V2_INSTALLED=true;" +
+                "window.__mboxKick=function(){" +
+                "var start=document.getElementById('start');" +
+                "var layout=document.querySelector('.layoutHolder');" +
+                "var screen=document.getElementById('screen-layout');" +
+                "var player=document.getElementById('player');" +
+                "if(layout){layout.style.setProperty('display','block','important');}" +
+                "if(screen){screen.style.setProperty('display','block','important');}" +
+                "if(start){start.style.setProperty('display','none','important');}" +
+                "if(player){" +
+                "player.style.setProperty('display','block','important');" +
+                "player.setAttribute('playsinline','');" +
+                "player.autoplay=true;" +
+                "var p=player.play();" +
+                "if(p&&typeof p.catch==='function'){p.catch(function(){});}" +
+                "}" +
+                "return !!(player||start);" +
+                "};" +
+                "try{if(window.jQuery){jQuery(document).off('fullscreenchange webkitfullscreenchange mozfullscreenchange MSFullscreenChange');}}catch(e){}" +
+                "try{new MutationObserver(function(){window.__mboxKick();}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}" +
+                "setInterval(function(){window.__mboxKick();},1000);" +
+                "document.addEventListener('keydown',function(e){if(e.key==='Enter'||e.keyCode===13||e.keyCode===23){window.__mboxKick();}},true);" +
+                "}" +
+                "return window.__mboxKick&&window.__mboxKick()?'ready':'waiting';" +
+                "}catch(e){return 'error';}" +
+                "})();";
+
+        webView.evaluateJavascript(script, value -> {
+            if (destroyed) return;
+            if (value != null && value.contains("ready")) {
+                pageLoaded = true;
+                connectOverlay.setVisibility(View.GONE);
+                webView.setVisibility(View.VISIBLE);
+                webView.requestFocus();
+                immersive();
             }
         });
     }
@@ -138,6 +235,16 @@ public class PlayerActivity extends Activity {
                 }
             });
         });
+    }
+
+    private void reloadFromStart() {
+        if (destroyed) return;
+        pageLoaded = false;
+        if (webView != null) {
+            webView.stopLoading();
+            webView.loadUrl("about:blank");
+        }
+        handler.postDelayed(this::startSmartConnection, 200);
     }
 
     private boolean isReachable(String address) {
@@ -202,13 +309,19 @@ public class PlayerActivity extends Activity {
             }
             if (event.getAction() == KeyEvent.ACTION_UP) {
                 handler.removeCallbacks(openSettingsRunnable);
-                if (!backHeldTriggered) {
-                    // Short BACK does nothing: keeps client inside MBOX TV.
-                    immersive();
-                }
+                if (!backHeldTriggered) immersive();
                 return true;
             }
         }
+
+        // Remote OK/ENTER is also a manual fallback for unusual WebView builds.
+        if (event.getAction() == KeyEvent.ACTION_UP
+                && (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER
+                || event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
+            injectAutoPlay();
+            return true;
+        }
+
         return super.dispatchKeyEvent(event);
     }
 
@@ -244,6 +357,7 @@ public class PlayerActivity extends Activity {
     protected void onResume() {
         super.onResume();
         immersive();
+        if (pageLoaded) scheduleAutoPlayAttempts();
     }
 
     @Override
