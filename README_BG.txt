@@ -1,4 +1,4 @@
-MBOX TV – Android TV Box v1.0.1
+MBOX TV – Android TV Box v1.1.0
 ===============================
 
 ЦЕЛ
@@ -12,7 +12,7 @@ MBOX TV – Android TV Box v1.0.1
 ПЪРВО ПУСКАНЕ
 --------------
 Въведи LAN адреса на компютъра/сървъра, например:
-http://192.168.1.50/tv/player
+http://192.168.1.117/tv/
 
 НЕ използвай http://localhost/... на Android TV Box. Там localhost означава самия TV Box.
 
@@ -58,7 +58,7 @@ Android Studio:
 ТЕХНИЧЕСКИ
 ----------
 Application ID: com.mbox.tvplayer
-Version: 1.0.1 (2)
+Version: 1.1.0 (3)
 minSdk: 23
 compileSdk: 35
 targetSdk: 34
@@ -66,3 +66,20 @@ Java: 17
 AGP: 8.7.3
 Gradle: 8.9
 Cleartext HTTP: разрешен за локални адреси от типа http://192.168.x.x/...
+
+
+=== V1.1.0 / ANDROID TV WEBVIEW MODE ===
+- Препоръчителен адрес: http://IP-НА-СЪРВЪРА/tv/
+- WebView пази PHP cookies/session при redirect към /tv/player.
+- HTML5 video autoplay е разрешен без user gesture.
+- Старият #start Play бутон се скрива автоматично.
+- Видео елементът се показва и стартира автоматично след redirect.
+- MutationObserver + периодичен retry поддържат player-а при бавно зареждане/DOM update.
+- OK/ENTER от дистанционното е резервен ръчен trigger.
+- При main-frame HTTP/network error се връща логото и приложението опитва отново.
+
+=== V3 / 1.2.0 ===
+- Нов iframe режим (включен по подразбиране) с TV URL от локалната мрежа.
+- BACK задържан 3 секунди -> PIN -> Настройки / Рестарт / Изход към Android.
+- Изходът унищожава WebView и прекратява процеса, с защита от незабавно връщане ако MBOX TV е Home/Launcher.
+- В настройките може да се изключи iframe режимът и да се използва директен WebView.

@@ -26,6 +26,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -49,6 +50,10 @@ public class PlayerActivity extends Activity {
     private ImageView customLogo;
     private TextView defaultLogo;
     private TextView connectText;
+    private LinearLayout addressBar;
+    private EditText playerUrlEdit;
+    private Button openUrlButton;
+    private Button hideAddressBarButton;
 
     private boolean pageLoaded = false;
     private boolean destroyed = false;
@@ -72,6 +77,15 @@ public class PlayerActivity extends Activity {
         customLogo = findViewById(R.id.customLogo);
         defaultLogo = findViewById(R.id.defaultLogo);
         connectText = findViewById(R.id.connectText);
+        addressBar = findViewById(R.id.addressBar);
+        playerUrlEdit = findViewById(R.id.playerUrlEdit);
+        openUrlButton = findViewById(R.id.openUrlButton);
+        hideAddressBarButton = findViewById(R.id.hideAddressBarButton);
+
+        playerUrlEdit.setText(Prefs.getUrl(this));
+        addressBar.setVisibility(View.VISIBLE);
+        openUrlButton.setOnClickListener(v -> openUrlFromAddressBar());
+        hideAddressBarButton.setOnClickListener(v -> hideAddressBar());
 
         configureWebView();
         loadLogo();
@@ -152,7 +166,8 @@ public class PlayerActivity extends Activity {
 
         String url = Prefs.getUrl(this).trim();
         if (url.isEmpty()) {
-            openSetup();
+            showConnecting("Въведи TV адрес в горната лента и натисни ОТВОРИ.");
+            showAddressBar();
             return;
         }
 
@@ -178,6 +193,55 @@ public class PlayerActivity extends Activity {
         } else {
             webView.loadUrl(targetUrl);
         }
+    }
+
+    private void openUrlFromAddressBar() {
+        String url = playerUrlEdit.getText().toString().trim();
+        if (url.isEmpty()) {
+            Toast.makeText(this, "Въведи TV адрес.", Toast.LENGTH_LONG).show();
+            playerUrlEdit.requestFocus();
+            return;
+        }
+        if (!(url.startsWith("http://") || url.startsWith("https://"))) {
+            Toast.makeText(this, "Адресът трябва да започва с http:// или https://", Toast.LENGTH_LONG).show();
+            playerUrlEdit.requestFocus();
+            return;
+        }
+        String low = url.toLowerCase();
+        if (low.contains("localhost") || low.contains("127.0.0.1")) {
+            Toast.makeText(this, "На TV Box localhost е самият Android Box. Използвай IP адреса на TV сървъра.", Toast.LENGTH_LONG).show();
+            playerUrlEdit.requestFocus();
+            return;
+        }
+
+        Prefs.setUrl(this, url);
+        Prefs.setManualExit(this, false);
+        pageLoaded = false;
+        reloadScheduled = false;
+        handler.removeCallbacksAndMessages(null);
+        if (webView != null) {
+            webView.stopLoading();
+            webView.loadUrl("about:blank");
+        }
+        showConnecting("Свързване…");
+        handler.postDelayed(this::startSmartConnection, 200);
+    }
+
+    private void showAddressBar() {
+        if (addressBar != null) {
+            addressBar.setVisibility(View.VISIBLE);
+            addressBar.bringToFront();
+        }
+        if (playerUrlEdit != null && playerUrlEdit.getText().toString().trim().isEmpty()) {
+            playerUrlEdit.setText(Prefs.getUrl(this));
+        }
+        immersive();
+    }
+
+    private void hideAddressBar() {
+        if (addressBar != null) addressBar.setVisibility(View.GONE);
+        if (webView != null) webView.requestFocus();
+        immersive();
     }
 
     /**
@@ -442,6 +506,7 @@ public class PlayerActivity extends Activity {
 
     private void showControlMenu() {
         String[] actions = {
+                "АДРЕСНА ЛЕНТА",
                 "НАСТРОЙКИ",
                 "РЕСТАРТИРАЙ ПЛЕЪРА",
                 "ИЗХОД КЪМ ANDROID",
@@ -453,12 +518,15 @@ public class PlayerActivity extends Activity {
                 .setItems(actions, (dialog, which) -> {
                     switch (which) {
                         case 0:
-                            openSetup();
+                            showAddressBar();
                             break;
                         case 1:
-                            reloadFromStart();
+                            openSetup();
                             break;
                         case 2:
+                            reloadFromStart();
+                            break;
+                        case 3:
                             exitApplication();
                             break;
                         default:
