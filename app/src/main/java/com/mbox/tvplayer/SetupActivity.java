@@ -21,6 +21,7 @@ public class SetupActivity extends Activity {
     private EditText urlEdit;
     private EditText pinEdit;
     private CheckBox autoStartCheck;
+    private CheckBox iframeModeCheck;
     private TextView logoStatus;
 
     @Override
@@ -31,15 +32,20 @@ public class SetupActivity extends Activity {
         urlEdit = findViewById(R.id.urlEdit);
         pinEdit = findViewById(R.id.pinEdit);
         autoStartCheck = findViewById(R.id.autoStartCheck);
+        iframeModeCheck = findViewById(R.id.iframeModeCheck);
         logoStatus = findViewById(R.id.logoStatus);
+
         Button chooseLogoButton = findViewById(R.id.chooseLogoButton);
         Button resetLogoButton = findViewById(R.id.resetLogoButton);
         Button saveButton = findViewById(R.id.saveButton);
+        Button restartButton = findViewById(R.id.restartButton);
+        Button exitButton = findViewById(R.id.exitButton);
         Button homeSettingsButton = findViewById(R.id.homeSettingsButton);
 
         urlEdit.setText(Prefs.getUrl(this));
         pinEdit.setText(Prefs.getPin(this));
         autoStartCheck.setChecked(Prefs.getAutostart(this));
+        iframeModeCheck.setChecked(Prefs.getIframeMode(this));
         updateLogoStatus();
 
         chooseLogoButton.setOnClickListener(v -> chooseLogo());
@@ -50,6 +56,8 @@ public class SetupActivity extends Activity {
             updateLogoStatus();
         });
         saveButton.setOnClickListener(v -> saveAndStart());
+        restartButton.setOnClickListener(v -> startPlayerWithoutSaving());
+        exitButton.setOnClickListener(v -> AppExit.exitToAndroid(this));
         homeSettingsButton.setOnClickListener(v -> openHomeSettings());
 
         urlEdit.requestFocus();
@@ -87,36 +95,51 @@ public class SetupActivity extends Activity {
         logoStatus.setText(uri.isEmpty() ? "Стандартно MBOX TV лого" : "Избрано собствено лого");
     }
 
-    private void saveAndStart() {
+    private boolean validateAndSave() {
         String url = urlEdit.getText().toString().trim();
         String pin = pinEdit.getText().toString().trim();
 
         if (url.isEmpty()) {
             toast("Въведи TV адрес.");
             urlEdit.requestFocus();
-            return;
+            return false;
         }
         if (!(url.startsWith("http://") || url.startsWith("https://"))) {
             toast("Адресът трябва да започва с http:// или https://");
             urlEdit.requestFocus();
-            return;
+            return false;
         }
         String low = url.toLowerCase();
         if (low.contains("localhost") || low.contains("127.0.0.1")) {
-            toast("На TV Box localhost означава самия бокс. Използвай IP адреса на TV сървъра, например 192.168.1.50.");
+            toast("На TV Box localhost означава самия бокс. Използвай IP адреса на TV сървъра, например 192.168.1.117.");
             urlEdit.requestFocus();
-            return;
+            return false;
         }
         if (pin.length() < 4) {
             toast("PIN трябва да е поне 4 цифри.");
             pinEdit.requestFocus();
-            return;
+            return false;
         }
 
         Prefs.setUrl(this, url);
         Prefs.setPin(this, pin);
         Prefs.setAutostart(this, autoStartCheck.isChecked());
+        Prefs.setIframeMode(this, iframeModeCheck.isChecked());
+        Prefs.setManualExit(this, false);
+        return true;
+    }
 
+    private void saveAndStart() {
+        if (!validateAndSave()) return;
+        launchPlayer();
+    }
+
+    private void startPlayerWithoutSaving() {
+        if (!validateAndSave()) return;
+        launchPlayer();
+    }
+
+    private void launchPlayer() {
         Intent player = new Intent(this, PlayerActivity.class);
         player.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(player);

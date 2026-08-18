@@ -9,7 +9,7 @@
     <string name="reset_logo">Стандартно лого</string>
     <string name="autostart">Стартирай при включване на TV Box</string>
     <string name="save_start">ЗАПАЗИ И СТАРТИРАЙ</string>
-    <string name="home_mode">НАПРАВИ MBOX TV НАЧАЛЕН ЕКРАН</string>
-    <string name="pin_label">PIN за настройки</string>
-    <string name="pin_prompt">Въведи PIN за настройки</string>
+    <string name="home_mode">НАСТРОЙКА НА HOME / LAUNCHER</string>
+    <string name="pin_label">PIN за аварийното меню</string>
+    <string name="pin_prompt">Въведи PIN</string>
 </resources>
