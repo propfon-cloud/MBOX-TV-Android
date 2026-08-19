@@ -1,3 +1,38 @@
 plugins {
-    id 'com.android.application' version '8.7.3' apply false
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.mbox.tvplayer'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.mbox.tvplayer'
+        minSdk 23
+        targetSdk 34
+        versionCode 11
+        versionName '1.2.7'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    flavorDimensions += 'distribution'
+    productFlavors {
+        direct {
+            dimension 'distribution'
+        }
+        play {
+            dimension 'distribution'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
 }
