@@ -53,7 +53,7 @@ public class SetupActivity extends Activity {
 
         // Quick Setup defaults: recommended options are ON.
         autoStartCheck.setChecked(true);
-        iframeModeCheck.setChecked(true);
+        iframeModeCheck.setChecked(false);
         updateLogoStatus();
 
         chooseLogoButton.setOnClickListener(v -> chooseLogo());

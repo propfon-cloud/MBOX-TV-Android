@@ -26,7 +26,6 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.ImageView;
-import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -50,15 +49,13 @@ public class PlayerActivity extends Activity {
     private ImageView customLogo;
     private TextView defaultLogo;
     private TextView connectText;
-    private LinearLayout addressBar;
-    private EditText playerUrlEdit;
-    private Button openUrlButton;
-    private Button hideAddressBarButton;
 
     private boolean pageLoaded = false;
     private boolean destroyed = false;
     private boolean backHeldTriggered = false;
     private boolean reloadScheduled = false;
+    private boolean bootstrapDone = false;
+    private boolean playerNavigationScheduled = false;
 
     private final Runnable openControlMenuRunnable = () -> {
         backHeldTriggered = true;
@@ -77,15 +74,10 @@ public class PlayerActivity extends Activity {
         customLogo = findViewById(R.id.customLogo);
         defaultLogo = findViewById(R.id.defaultLogo);
         connectText = findViewById(R.id.connectText);
-        addressBar = findViewById(R.id.addressBar);
-        playerUrlEdit = findViewById(R.id.playerUrlEdit);
-        openUrlButton = findViewById(R.id.openUrlButton);
-        hideAddressBarButton = findViewById(R.id.hideAddressBarButton);
 
-        playerUrlEdit.setText(Prefs.getUrl(this));
-        addressBar.setVisibility(View.VISIBLE);
-        openUrlButton.setOnClickListener(v -> openUrlFromAddressBar());
-        hideAddressBarButton.setOnClickListener(v -> hideAddressBar());
+        // 1.2.6: direct WebView is the reliable mode for the local PHP player.
+        // Do not use iframe; keep one WebView so PHP cookies/session stay intact.
+        Prefs.setIframeMode(this, false);
 
         configureWebView();
         loadLogo();
@@ -132,12 +124,29 @@ public class PlayerActivity extends Activity {
                 if ("about:blank".equals(url)) return;
                 CookieManager.getInstance().flush();
 
-                if (Prefs.getIframeMode(PlayerActivity.this)) {
-                    // The local shell will call frameLoaded() when the TV iframe is ready.
-                    // Show it after a short safety timeout even on unusual WebView builds.
-                    handler.postDelayed(PlayerActivity.this::showPlayerSurface, 5000);
+                String configured = Prefs.getUrl(PlayerActivity.this).trim();
+                String playerUrl = playerUrlFor(configured);
+
+                // First visit /tv/ in the SAME WebView to establish the PHP session,
+                // then go to /tv/player automatically.
+                if (!bootstrapDone && !sameUrl(url, playerUrl)) {
+                    bootstrapDone = true;
+                    if (!playerNavigationScheduled) {
+                        playerNavigationScheduled = true;
+                        connectText.setText("Подготовка на TV сесията…");
+                        handler.postDelayed(() -> {
+                            if (!destroyed && webView != null) {
+                                webView.loadUrl(playerUrl);
+                            }
+                        }, 500);
+                    }
                 } else {
+                    bootstrapDone = true;
+                    playerNavigationScheduled = false;
                     scheduleDirectAutoPlayAttempts();
+                    // Keep trying longer because the playlist/video element can appear late.
+                    handler.postDelayed(PlayerActivity.this::injectDirectAutoPlay, 8000);
+                    handler.postDelayed(PlayerActivity.this::injectDirectAutoPlay, 12000);
                 }
                 immersive();
             }
@@ -166,8 +175,7 @@ public class PlayerActivity extends Activity {
 
         String url = Prefs.getUrl(this).trim();
         if (url.isEmpty()) {
-            showConnecting("Въведи TV адрес в горната лента и натисни ОТВОРИ.");
-            showAddressBar();
+            openSetup();
             return;
         }
 
@@ -188,60 +196,35 @@ public class PlayerActivity extends Activity {
 
     private void loadTv(String targetUrl) {
         reloadScheduled = false;
-        if (Prefs.getIframeMode(this)) {
-            loadIframeShell(targetUrl);
-        } else {
-            webView.loadUrl(targetUrl);
-        }
+        bootstrapDone = false;
+        playerNavigationScheduled = false;
+        webView.loadUrl(bootstrapUrlFor(targetUrl));
     }
 
-    private void openUrlFromAddressBar() {
-        String url = playerUrlEdit.getText().toString().trim();
-        if (url.isEmpty()) {
-            Toast.makeText(this, "Въведи TV адрес.", Toast.LENGTH_LONG).show();
-            playerUrlEdit.requestFocus();
-            return;
+    private String bootstrapUrlFor(String configured) {
+        if (configured == null) return "";
+        String u = configured.trim();
+        if (u.matches("(?i).*/player/?$")) {
+            return u.replaceFirst("(?i)player/?$", "");
         }
-        if (!(url.startsWith("http://") || url.startsWith("https://"))) {
-            Toast.makeText(this, "Адресът трябва да започва с http:// или https://", Toast.LENGTH_LONG).show();
-            playerUrlEdit.requestFocus();
-            return;
-        }
-        String low = url.toLowerCase();
-        if (low.contains("localhost") || low.contains("127.0.0.1")) {
-            Toast.makeText(this, "На TV Box localhost е самият Android Box. Използвай IP адреса на TV сървъра.", Toast.LENGTH_LONG).show();
-            playerUrlEdit.requestFocus();
-            return;
-        }
-
-        Prefs.setUrl(this, url);
-        Prefs.setManualExit(this, false);
-        pageLoaded = false;
-        reloadScheduled = false;
-        handler.removeCallbacksAndMessages(null);
-        if (webView != null) {
-            webView.stopLoading();
-            webView.loadUrl("about:blank");
-        }
-        showConnecting("Свързване…");
-        handler.postDelayed(this::startSmartConnection, 200);
+        return u;
     }
 
-    private void showAddressBar() {
-        if (addressBar != null) {
-            addressBar.setVisibility(View.VISIBLE);
-            addressBar.bringToFront();
+    private String playerUrlFor(String configured) {
+        String base = bootstrapUrlFor(configured);
+        if (base == null || base.isEmpty()) return configured;
+        if (base.matches("(?i).*/tv/?$")) {
+            return base.endsWith("/") ? base + "player" : base + "/player";
         }
-        if (playerUrlEdit != null && playerUrlEdit.getText().toString().trim().isEmpty()) {
-            playerUrlEdit.setText(Prefs.getUrl(this));
-        }
-        immersive();
+        // If a custom URL is used, do not invent a route.
+        return configured;
     }
 
-    private void hideAddressBar() {
-        if (addressBar != null) addressBar.setVisibility(View.GONE);
-        if (webView != null) webView.requestFocus();
-        immersive();
+    private boolean sameUrl(String a, String b) {
+        if (a == null || b == null) return false;
+        String aa = a.replaceAll("/+$", "");
+        String bb = b.replaceAll("/+$", "");
+        return aa.equalsIgnoreCase(bb);
     }
 
     /**
@@ -269,15 +252,20 @@ public class PlayerActivity extends Activity {
                 "function kick(){" +
                 " try{" +
                 "  const w=f.contentWindow,d=f.contentDocument;if(!d)return false;" +
+                "  let css=d.getElementById('__mbox_android_css');" +
+                "  if(!css){css=d.createElement('style');css.id='__mbox_android_css';" +
+                "   css.textContent='#start{display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important}.layoutHolder,#screen-layout{display:block!important}';" +
+                "   (d.head||d.documentElement).appendChild(css);}" +
                 "  const start=d.getElementById('start');" +
                 "  const layout=d.querySelector('.layoutHolder');" +
                 "  const screen=d.getElementById('screen-layout');" +
                 "  const player=d.getElementById('player');" +
                 "  if(layout)layout.style.setProperty('display','block','important');" +
                 "  if(screen)screen.style.setProperty('display','block','important');" +
-                "  if(start)start.style.setProperty('display','none','important');" +
+                "  if(start){start.style.setProperty('display','none','important');start.style.setProperty('visibility','hidden','important');}" +
                 "  try{if(w.jQuery){w.jQuery(d).off('fullscreenchange webkitfullscreenchange mozfullscreenchange MSFullscreenChange');w.jQuery('#start').off('click');}}catch(e){}" +
-                "  if(player){player.style.setProperty('display','block','important');player.setAttribute('playsinline','');player.autoplay=true;" +
+                "  try{if(typeof w.startVideo==='function')w.startVideo();}catch(e){}" +
+                "  if(player){player.style.setProperty('display','block','important');player.setAttribute('playsinline','');player.autoplay=true;player.muted=true;" +
                 "   const p=player.play();if(p&&p.catch)p.catch(()=>{});}" +
                 "  if(player||start){announce();return true;}" +
                 " }catch(e){announce();}" +
@@ -345,8 +333,10 @@ public class PlayerActivity extends Activity {
                 "screen=document.getElementById('screen-layout'),player=document.getElementById('player');" +
                 "if(layout)layout.style.setProperty('display','block','important');" +
                 "if(screen)screen.style.setProperty('display','block','important');" +
-                "if(start)start.style.setProperty('display','none','important');" +
-                "if(player){player.style.setProperty('display','block','important');player.setAttribute('playsinline','');player.autoplay=true;" +
+                "if(!document.getElementById('__mbox_clean_css')){var st=document.createElement('style');st.id='__mbox_clean_css';st.textContent='#start{display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important}.layoutHolder,#screen-layout{display:block!important}';(document.head||document.documentElement).appendChild(st);}" +
+                "if(start){start.style.setProperty('display','none','important');start.style.setProperty('visibility','hidden','important');}" +
+                "try{if(typeof window.startVideo==='function')window.startVideo();}catch(e){}" +
+                "if(player){player.style.setProperty('display','block','important');player.setAttribute('playsinline','');player.autoplay=true;player.muted=true;" +
                 "var p=player.play();if(p&&p.catch)p.catch(function(){});}" +
                 "return !!(player||start);};" +
                 "try{if(window.jQuery){jQuery(document).off('fullscreenchange webkitfullscreenchange mozfullscreenchange MSFullscreenChange');jQuery('#start').off('click');}}catch(e){}" +
@@ -373,6 +363,8 @@ public class PlayerActivity extends Activity {
         if (destroyed) return;
         reloadScheduled = false;
         pageLoaded = false;
+        bootstrapDone = false;
+        playerNavigationScheduled = false;
         if (webView != null) {
             webView.stopLoading();
             webView.loadUrl("about:blank");
@@ -506,7 +498,6 @@ public class PlayerActivity extends Activity {
 
     private void showControlMenu() {
         String[] actions = {
-                "АДРЕСНА ЛЕНТА",
                 "НАСТРОЙКИ",
                 "РЕСТАРТИРАЙ ПЛЕЪРА",
                 "ИЗХОД КЪМ ANDROID",
@@ -518,15 +509,12 @@ public class PlayerActivity extends Activity {
                 .setItems(actions, (dialog, which) -> {
                     switch (which) {
                         case 0:
-                            showAddressBar();
-                            break;
-                        case 1:
                             openSetup();
                             break;
-                        case 2:
+                        case 1:
                             reloadFromStart();
                             break;
-                        case 3:
+                        case 2:
                             exitApplication();
                             break;
                         default:

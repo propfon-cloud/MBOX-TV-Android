@@ -32,7 +32,7 @@ public final class Prefs {
     public static String getPin(Context c) { return p(c).getString(KEY_PIN, "1234"); }
     public static void setPin(Context c, String value) { p(c).edit().putString(KEY_PIN, value).apply(); }
 
-    public static boolean getIframeMode(Context c) { return p(c).getBoolean(KEY_IFRAME_MODE, true); }
+    public static boolean getIframeMode(Context c) { return p(c).getBoolean(KEY_IFRAME_MODE, false); }
     public static void setIframeMode(Context c, boolean value) { p(c).edit().putBoolean(KEY_IFRAME_MODE, value).apply(); }
 
     public static boolean getManualExit(Context c) { return p(c).getBoolean(KEY_MANUAL_EXIT, false); }
