@@ -9,6 +9,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.ScrollView;
 import android.widget.Toast;
 
 import java.io.File;
@@ -23,6 +24,7 @@ public class SetupActivity extends Activity {
     private CheckBox autoStartCheck;
     private CheckBox iframeModeCheck;
     private TextView logoStatus;
+    private ScrollView setupScroll;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,6 +36,7 @@ public class SetupActivity extends Activity {
         autoStartCheck = findViewById(R.id.autoStartCheck);
         iframeModeCheck = findViewById(R.id.iframeModeCheck);
         logoStatus = findViewById(R.id.logoStatus);
+        setupScroll = findViewById(R.id.setupScroll);
 
         Button chooseLogoButton = findViewById(R.id.chooseLogoButton);
         Button resetLogoButton = findViewById(R.id.resetLogoButton);
@@ -42,10 +45,15 @@ public class SetupActivity extends Activity {
         Button exitButton = findViewById(R.id.exitButton);
         Button homeSettingsButton = findViewById(R.id.homeSettingsButton);
 
-        urlEdit.setText(Prefs.getUrl(this));
-        pinEdit.setText(Prefs.getPin(this));
-        autoStartCheck.setChecked(Prefs.getAutostart(this));
-        iframeModeCheck.setChecked(Prefs.getIframeMode(this));
+        String savedUrl = Prefs.getUrl(this).trim();
+        urlEdit.setText(savedUrl.isEmpty() ? "http://192.168.1.117/tv/" : savedUrl);
+
+        String savedPin = Prefs.getPin(this).trim();
+        pinEdit.setText(savedPin.isEmpty() ? "1234" : savedPin);
+
+        // Quick Setup defaults: recommended options are ON.
+        autoStartCheck.setChecked(true);
+        iframeModeCheck.setChecked(true);
         updateLogoStatus();
 
         chooseLogoButton.setOnClickListener(v -> chooseLogo());
@@ -60,7 +68,13 @@ public class SetupActivity extends Activity {
         exitButton.setOnClickListener(v -> AppExit.exitToAndroid(this));
         homeSettingsButton.setOnClickListener(v -> openHomeSettings());
 
-        urlEdit.requestFocus();
+        // TV address is outside the ScrollView and can never be scrolled away.
+        // Put focus on it at setup start.
+        urlEdit.post(() -> {
+            urlEdit.requestFocus();
+            urlEdit.setSelection(urlEdit.getText().length());
+            setupScroll.scrollTo(0, 0);
+        });
     }
 
     private void chooseLogo() {

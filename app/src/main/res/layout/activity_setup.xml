@@ -1,190 +1,212 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/mbox_bg"
-    android:fillViewport="true">
+    android:orientation="vertical"
+    android:background="@color/mbox_bg">
 
+    <!-- TV address is intentionally OUTSIDE the ScrollView so it is always visible. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="center"
         android:orientation="vertical"
         android:paddingLeft="72dp"
-        android:paddingTop="32dp"
+        android:paddingTop="24dp"
         android:paddingRight="72dp"
-        android:paddingBottom="48dp">
+        android:paddingBottom="12dp">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="MBOX TV"
             android:textColor="@color/mbox_text"
-            android:textSize="34sp"
+            android:textSize="30sp"
             android:textStyle="bold" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="V3 • Android TV Browser"
-            android:textColor="@color/mbox_muted"
-            android:textSize="17sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/tv_url"
+            android:layout_marginTop="4dp"
+            android:text="TV адрес"
             android:textColor="@color/mbox_text"
-            android:textSize="18sp" />
+            android:textSize="18sp"
+            android:textStyle="bold" />
 
         <EditText
             android:id="@+id/urlEdit"
             android:layout_width="match_parent"
             android:layout_height="58dp"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:background="@drawable/field_bg"
             android:hint="http://192.168.1.117/tv/"
             android:inputType="textUri"
             android:singleLine="true"
             android:textColor="@color/mbox_text"
             android:textColorHint="#7F8793"
-            android:textSize="18sp" />
-
-        <CheckBox
-            android:id="@+id/iframeModeCheck"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:checked="true"
-            android:focusable="true"
-            android:text="iframe режим (препоръчителен)"
-            android:textColor="@color/mbox_text"
-            android:textSize="17sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="При включен режим MBOX TV отваря локална браузърна обвивка и зарежда TV адреса в iframe. Ако сървърът блокира iframe, махни отметката за директен WebView режим."
-            android:textColor="@color/mbox_muted"
-            android:textSize="14sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="Лого при свързване"
-            android:textColor="@color/mbox_text"
-            android:textSize="18sp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/chooseLogoButton"
-                android:layout_width="wrap_content"
-                android:layout_height="56dp"
-                android:focusable="true"
-                android:text="@string/choose_logo" />
-
-            <Button
-                android:id="@+id/resetLogoButton"
-                android:layout_width="wrap_content"
-                android:layout_height="56dp"
-                android:layout_marginLeft="14dp"
-                android:focusable="true"
-                android:text="@string/reset_logo" />
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/logoStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="7dp"
-            android:text="Стандартно MBOX TV лого"
-            android:textColor="@color/mbox_muted"
-            android:textSize="15sp" />
-
-        <CheckBox
-            android:id="@+id/autoStartCheck"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:checked="true"
-            android:focusable="true"
-            android:text="@string/autostart"
-            android:textColor="@color/mbox_text"
-            android:textSize="17sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/pin_label"
-            android:textColor="@color/mbox_text"
-            android:textSize="18sp" />
-
-        <EditText
-            android:id="@+id/pinEdit"
-            android:layout_width="260dp"
-            android:layout_height="56dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/field_bg"
-            android:hint="1234"
-            android:inputType="numberPassword"
-            android:maxLength="8"
-            android:singleLine="true"
-            android:textColor="@color/mbox_text"
-            android:textColorHint="#7F8793"
-            android:textSize="18sp" />
+            android:textSize="18sp"
+            android:nextFocusDown="@id/saveButton" />
 
         <Button
             android:id="@+id/saveButton"
             android:layout_width="360dp"
             android:layout_height="64dp"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="12dp"
             android:focusable="true"
+            android:nextFocusUp="@id/urlEdit"
+            android:nextFocusDown="@id/iframeModeCheck"
             android:text="@string/save_start"
             android:textSize="18sp" />
 
-        <Button
-            android:id="@+id/restartButton"
-            android:layout_width="360dp"
-            android:layout_height="60dp"
-            android:layout_marginTop="12dp"
-            android:focusable="true"
-            android:text="РЕСТАРТИРАЙ ПЛЕЪРА"
-            android:textSize="16sp" />
-
-        <Button
-            android:id="@+id/exitButton"
-            android:layout_width="360dp"
-            android:layout_height="60dp"
-            android:layout_marginTop="12dp"
-            android:focusable="true"
-            android:text="ИЗХОД КЪМ ANDROID"
-            android:textSize="16sp" />
-
-        <Button
-            android:id="@+id/homeSettingsButton"
-            android:layout_width="430dp"
-            android:layout_height="60dp"
-            android:layout_marginTop="12dp"
-            android:focusable="true"
-            android:text="@string/home_mode"
-            android:textSize="15sp" />
-
         <TextView
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:text="Аварийно меню: задръж BACK за 3 секунди → PIN → Настройки / Рестарт / Изход към Android. При Изход приложението спира WebView, затваря всички свои екрани и прекратява процеса."
+            android:layout_marginTop="6dp"
+            android:text="Бърз старт: всички препоръчителни настройки са включени."
             android:textColor="@color/mbox_muted"
             android:textSize="14sp" />
     </LinearLayout>
-</ScrollView>
+
+    <ScrollView
+        android:id="@+id/setupScroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingLeft="72dp"
+            android:paddingTop="4dp"
+            android:paddingRight="72dp"
+            android:paddingBottom="48dp">
+
+            <CheckBox
+                android:id="@+id/iframeModeCheck"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:focusable="true"
+                android:text="iframe режим (препоръчителен)"
+                android:textColor="@color/mbox_text"
+                android:textSize="17sp"
+                android:nextFocusUp="@id/saveButton" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="При включен режим MBOX TV отваря локална браузърна обвивка и зарежда TV адреса в iframe. Ако сървърът блокира iframe, махни отметката за директен WebView режим."
+                android:textColor="@color/mbox_muted"
+                android:textSize="14sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="Лого при свързване"
+                android:textColor="@color/mbox_text"
+                android:textSize="18sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/chooseLogoButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="56dp"
+                    android:focusable="true"
+                    android:text="@string/choose_logo" />
+
+                <Button
+                    android:id="@+id/resetLogoButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="56dp"
+                    android:layout_marginLeft="14dp"
+                    android:focusable="true"
+                    android:text="@string/reset_logo" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/logoStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="7dp"
+                android:text="Стандартно MBOX TV лого"
+                android:textColor="@color/mbox_muted"
+                android:textSize="15sp" />
+
+            <CheckBox
+                android:id="@+id/autoStartCheck"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:checked="true"
+                android:focusable="true"
+                android:text="@string/autostart"
+                android:textColor="@color/mbox_text"
+                android:textSize="17sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/pin_label"
+                android:textColor="@color/mbox_text"
+                android:textSize="18sp" />
+
+            <EditText
+                android:id="@+id/pinEdit"
+                android:layout_width="260dp"
+                android:layout_height="56dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/field_bg"
+                android:hint="1234"
+                android:inputType="numberPassword"
+                android:maxLength="8"
+                android:singleLine="true"
+                android:textColor="@color/mbox_text"
+                android:textColorHint="#7F8793"
+                android:textSize="18sp" />
+
+            <Button
+                android:id="@+id/restartButton"
+                android:layout_width="360dp"
+                android:layout_height="60dp"
+                android:layout_marginTop="12dp"
+                android:focusable="true"
+                android:text="РЕСТАРТИРАЙ ПЛЕЪРА"
+                android:textSize="16sp" />
+
+            <Button
+                android:id="@+id/exitButton"
+                android:layout_width="360dp"
+                android:layout_height="60dp"
+                android:layout_marginTop="12dp"
+                android:focusable="true"
+                android:text="ИЗХОД КЪМ ANDROID"
+                android:textSize="16sp" />
+
+            <Button
+                android:id="@+id/homeSettingsButton"
+                android:layout_width="430dp"
+                android:layout_height="60dp"
+                android:layout_marginTop="12dp"
+                android:focusable="true"
+                android:text="@string/home_mode"
+                android:textSize="15sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="Аварийно меню: задръж BACK за 3 секунди → PIN → Настройки / Рестарт / Изход към Android. При Изход приложението спира WebView, затваря всички свои екрани и прекратява процеса."
+                android:textColor="@color/mbox_muted"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
