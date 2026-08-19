@@ -46,7 +46,10 @@ public class SetupActivity extends Activity {
         Button homeSettingsButton = findViewById(R.id.homeSettingsButton);
 
         String savedUrl = Prefs.getUrl(this).trim();
-        urlEdit.setText(savedUrl.isEmpty() ? "http://192.168.1.117/tv/" : savedUrl);
+        if (savedUrl.isEmpty() || savedUrl.equalsIgnoreCase("http://192.168.1.117/tv/")) {
+            savedUrl = "http://192.168.1.117/tv/player";
+        }
+        urlEdit.setText(savedUrl);
 
         String savedPin = Prefs.getPin(this).trim();
         pinEdit.setText(savedPin.isEmpty() ? "1234" : savedPin);
@@ -138,7 +141,7 @@ public class SetupActivity extends Activity {
         Prefs.setUrl(this, url);
         Prefs.setPin(this, pin);
         Prefs.setAutostart(this, autoStartCheck.isChecked());
-        Prefs.setIframeMode(this, iframeModeCheck.isChecked());
+        Prefs.setIframeMode(this, false);
         Prefs.setManualExit(this, false);
         Prefs.markSetupShownForCurrentVersion(this);
         return true;

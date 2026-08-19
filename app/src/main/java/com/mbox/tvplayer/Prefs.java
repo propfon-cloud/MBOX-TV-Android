@@ -12,7 +12,7 @@ public final class Prefs {
     private static final String KEY_IFRAME_MODE = "iframe_mode";
     private static final String KEY_MANUAL_EXIT = "manual_exit";
     private static final String KEY_SETUP_REVISION = "setup_revision";
-    public static final int CURRENT_SETUP_REVISION = 6;
+    public static final int CURRENT_SETUP_REVISION = 7;
 
     private Prefs() {}
 
@@ -20,7 +20,7 @@ public final class Prefs {
         return c.getSharedPreferences(FILE, Context.MODE_PRIVATE);
     }
 
-    public static String getUrl(Context c) { return p(c).getString(KEY_URL, "http://192.168.1.117/tv/"); }
+    public static String getUrl(Context c) { return p(c).getString(KEY_URL, "http://192.168.1.117/tv/player"); }
     public static void setUrl(Context c, String value) { p(c).edit().putString(KEY_URL, value).apply(); }
 
     public static String getLogoUri(Context c) { return p(c).getString(KEY_LOGO_URI, ""); }

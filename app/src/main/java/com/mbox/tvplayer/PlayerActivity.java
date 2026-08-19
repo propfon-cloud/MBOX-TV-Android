@@ -4,9 +4,6 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
-import android.net.ConnectivityManager;
-import android.net.Network;
-import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -16,7 +13,6 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
-import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -30,19 +26,11 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import org.json.JSONObject;
-
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 public class PlayerActivity extends Activity {
     private static final long RETRY_MS = 1500;
     private static final long BACK_HOLD_MS = 3000;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     private WebView webView;
     private LinearLayout connectOverlay;
@@ -50,12 +38,9 @@ public class PlayerActivity extends Activity {
     private TextView defaultLogo;
     private TextView connectText;
 
-    private boolean pageLoaded = false;
     private boolean destroyed = false;
     private boolean backHeldTriggered = false;
     private boolean reloadScheduled = false;
-    private boolean bootstrapDone = false;
-    private boolean playerNavigationScheduled = false;
 
     private final Runnable openControlMenuRunnable = () -> {
         backHeldTriggered = true;
@@ -75,28 +60,37 @@ public class PlayerActivity extends Activity {
         defaultLogo = findViewById(R.id.defaultLogo);
         connectText = findViewById(R.id.connectText);
 
-        // 1.2.6: direct WebView is the reliable mode for the local PHP player.
-        // Do not use iframe; keep one WebView so PHP cookies/session stay intact.
+        // Browser Mode: one direct WebView. No iframe, no bootstrap route,
+        // no DOM/CSS/JavaScript manipulation of the TV page.
         Prefs.setIframeMode(this, false);
 
         configureWebView();
         loadLogo();
-        startSmartConnection();
+        openConfiguredAddress();
     }
 
     private void configureWebView() {
         WebSettings s = webView.getSettings();
+
+        // Behave as closely as possible to a normal Android browser.
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
+        s.setJavaScriptCanOpenWindowsAutomatically(true);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
+        s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
-        s.setSupportZoom(false);
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        s.setJavaScriptCanOpenWindowsAutomatically(true);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
+
+        // Remove the explicit WebView marker from the UA where present.
+        String ua = s.getUserAgentString();
+        if (ua != null && !ua.isEmpty()) {
+            s.setUserAgentString(ua.replace("; wv", ""));
+        }
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
@@ -108,14 +102,20 @@ public class PlayerActivity extends Activity {
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
-        webView.addJavascriptInterface(new ShellBridge(), "MboxAndroid");
 
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                connectText.setText("Зареждане…");
+                reloadScheduled = false;
+                showConnecting("Зареждане…");
+            }
+
+            @Override
+            public void onPageCommitVisible(WebView view, String url) {
+                super.onPageCommitVisible(view, url);
+                showBrowserSurface();
             }
 
             @Override
@@ -123,31 +123,7 @@ public class PlayerActivity extends Activity {
                 super.onPageFinished(view, url);
                 if ("about:blank".equals(url)) return;
                 CookieManager.getInstance().flush();
-
-                String configured = Prefs.getUrl(PlayerActivity.this).trim();
-                String playerUrl = playerUrlFor(configured);
-
-                // First visit /tv/ in the SAME WebView to establish the PHP session,
-                // then go to /tv/player automatically.
-                if (!bootstrapDone && !sameUrl(url, playerUrl)) {
-                    bootstrapDone = true;
-                    if (!playerNavigationScheduled) {
-                        playerNavigationScheduled = true;
-                        connectText.setText("Подготовка на TV сесията…");
-                        handler.postDelayed(() -> {
-                            if (!destroyed && webView != null) {
-                                webView.loadUrl(playerUrl);
-                            }
-                        }, 500);
-                    }
-                } else {
-                    bootstrapDone = true;
-                    playerNavigationScheduled = false;
-                    scheduleDirectAutoPlayAttempts();
-                    // Keep trying longer because the playlist/video element can appear late.
-                    handler.postDelayed(PlayerActivity.this::injectDirectAutoPlay, 8000);
-                    handler.postDelayed(PlayerActivity.this::injectDirectAutoPlay, 12000);
-                }
+                showBrowserSurface();
                 immersive();
             }
 
@@ -160,18 +136,23 @@ public class PlayerActivity extends Activity {
             }
 
             @Override
-            public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+            public void onReceivedHttpError(WebView view, WebResourceRequest request,
+                                            WebResourceResponse errorResponse) {
                 super.onReceivedHttpError(view, request, errorResponse);
-                if (request != null && request.isForMainFrame() && errorResponse != null
+                if (request != null && request.isForMainFrame()
+                        && errorResponse != null
                         && errorResponse.getStatusCode() >= 400) {
-                    scheduleReload("Сървърът отговори " + errorResponse.getStatusCode() + ". Нов опит…", 2500);
+                    scheduleReload(
+                            "Сървърът отговори " + errorResponse.getStatusCode() + ". Нов опит…",
+                            2500
+                    );
                 }
             }
         });
     }
 
-    private void startSmartConnection() {
-        if (destroyed || pageLoaded) return;
+    private void openConfiguredAddress() {
+        if (destroyed || webView == null) return;
 
         String url = Prefs.getUrl(this).trim();
         if (url.isEmpty()) {
@@ -179,230 +160,31 @@ public class PlayerActivity extends Activity {
             return;
         }
 
-        showConnecting(hasNetwork() ? "Свързване…" : "Изчакване на мрежата…");
-        executor.execute(() -> {
-            boolean reachable = hasNetwork() && isReachable(url);
-            handler.post(() -> {
-                if (destroyed || pageLoaded) return;
-                if (reachable) {
-                    connectText.setText(Prefs.getIframeMode(this) ? "Отваряне в TV браузъра…" : "Зареждане…");
-                    loadTv(url);
-                } else {
-                    handler.postDelayed(this::startSmartConnection, RETRY_MS);
-                }
-            });
-        });
-    }
-
-    private void loadTv(String targetUrl) {
         reloadScheduled = false;
-        bootstrapDone = false;
-        playerNavigationScheduled = false;
-        webView.loadUrl(bootstrapUrlFor(targetUrl));
+        showConnecting("Свързване…");
+
+        // EXACTLY the configured address, just like typing it in a browser and pressing Enter.
+        webView.loadUrl(url);
     }
 
-    private String bootstrapUrlFor(String configured) {
-        if (configured == null) return "";
-        String u = configured.trim();
-        if (u.matches("(?i).*/player/?$")) {
-            return u.replaceFirst("(?i)player/?$", "");
-        }
-        return u;
-    }
-
-    private String playerUrlFor(String configured) {
-        String base = bootstrapUrlFor(configured);
-        if (base == null || base.isEmpty()) return configured;
-        if (base.matches("(?i).*/tv/?$")) {
-            return base.endsWith("/") ? base + "player" : base + "/player";
-        }
-        // If a custom URL is used, do not invent a route.
-        return configured;
-    }
-
-    private boolean sameUrl(String a, String b) {
-        if (a == null || b == null) return false;
-        String aa = a.replaceAll("/+$", "");
-        String bb = b.replaceAll("/+$", "");
-        return aa.equalsIgnoreCase(bb);
-    }
-
-    /**
-     * Loads a local HTML shell but assigns it the TV server origin with loadDataWithBaseURL().
-     * For a URL such as http://192.168.1.117/tv/ the shell and iframe therefore share the
-     * same host/port. That lets the shell preserve PHP cookies/session and, when allowed by
-     * the server, reach the legacy #start/video elements to start playback automatically.
-     */
-    private void loadIframeShell(String targetUrl) {
-        String baseOrigin = originOf(targetUrl);
-        String quotedTarget = JSONObject.quote(targetUrl);
-
-        String html = "<!doctype html>" +
-                "<html><head><meta charset='utf-8'>" +
-                "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no'>" +
-                "<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}" +
-                "#tv{position:fixed;inset:0;width:100%;height:100%;border:0;background:#000}</style>" +
-                "</head><body>" +
-                "<iframe id='tv' allow='autoplay; fullscreen; encrypted-media' allowfullscreen></iframe>" +
-                "<script>" +
-                "const TARGET=" + quotedTarget + ";" +
-                "const f=document.getElementById('tv');" +
-                "let announced=false;let downCount=0;" +
-                "function announce(){if(!announced){announced=true;try{MboxAndroid.frameLoaded();}catch(e){}}}" +
-                "function kick(){" +
-                " try{" +
-                "  const w=f.contentWindow,d=f.contentDocument;if(!d)return false;" +
-                "  let css=d.getElementById('__mbox_android_css');" +
-                "  if(!css){css=d.createElement('style');css.id='__mbox_android_css';" +
-                "   css.textContent='#start{display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important}.layoutHolder,#screen-layout{display:block!important}';" +
-                "   (d.head||d.documentElement).appendChild(css);}" +
-                "  const start=d.getElementById('start');" +
-                "  const layout=d.querySelector('.layoutHolder');" +
-                "  const screen=d.getElementById('screen-layout');" +
-                "  const player=d.getElementById('player');" +
-                "  if(layout)layout.style.setProperty('display','block','important');" +
-                "  if(screen)screen.style.setProperty('display','block','important');" +
-                "  if(start){start.style.setProperty('display','none','important');start.style.setProperty('visibility','hidden','important');}" +
-                "  try{if(w.jQuery){w.jQuery(d).off('fullscreenchange webkitfullscreenchange mozfullscreenchange MSFullscreenChange');w.jQuery('#start').off('click');}}catch(e){}" +
-                "  try{if(typeof w.startVideo==='function')w.startVideo();}catch(e){}" +
-                "  if(player){player.style.setProperty('display','block','important');player.setAttribute('playsinline','');player.autoplay=true;player.muted=true;" +
-                "   const p=player.play();if(p&&p.catch)p.catch(()=>{});}" +
-                "  if(player||start){announce();return true;}" +
-                " }catch(e){announce();}" +
-                " return false;" +
-                "}" +
-                "f.addEventListener('load',()=>{announce();setTimeout(kick,50);setTimeout(kick,300);setTimeout(kick,1000);setTimeout(kick,2500);});" +
-                "setInterval(kick,1000);" +
-                "document.addEventListener('keydown',e=>{if(e.key==='Enter'||e.keyCode===13||e.keyCode===23)kick();},true);" +
-                "setInterval(()=>{fetch(TARGET,{cache:'no-store',credentials:'include'}).then(r=>{downCount=0;}).catch(()=>{downCount++;if(downCount>=2){try{MboxAndroid.serverDown();}catch(e){}}});},10000);" +
-                "f.src=TARGET;" +
-                "</script></body></html>";
-
-        webView.loadDataWithBaseURL(baseOrigin, html, "text/html", "UTF-8", null);
-    }
-
-    private String originOf(String address) {
-        try {
-            URL url = new URL(address);
-            int port = url.getPort();
-            String portPart = port > 0 && port != url.getDefaultPort() ? ":" + port : "";
-            return url.getProtocol() + "://" + url.getHost() + portPart + "/";
-        } catch (Exception e) {
-            return address;
-        }
-    }
-
-    private final class ShellBridge {
-        @JavascriptInterface
-        public void frameLoaded() {
-            handler.post(PlayerActivity.this::showPlayerSurface);
-        }
-
-        @JavascriptInterface
-        public void serverDown() {
-            handler.post(() -> scheduleReload("TV сървърът не отговаря. Нов опит…", RETRY_MS));
-        }
-    }
-
-    private void showPlayerSurface() {
+    private void showBrowserSurface() {
         if (destroyed || webView == null) return;
-        pageLoaded = true;
         connectOverlay.setVisibility(View.GONE);
         webView.setVisibility(View.VISIBLE);
         webView.requestFocus();
         immersive();
     }
 
-    // Direct mode is retained as a fallback for servers that explicitly block iframes.
-    private void scheduleDirectAutoPlayAttempts() {
-        handler.postDelayed(this::injectDirectAutoPlay, 100);
-        handler.postDelayed(this::injectDirectAutoPlay, 500);
-        handler.postDelayed(this::injectDirectAutoPlay, 1200);
-        handler.postDelayed(this::injectDirectAutoPlay, 2500);
-        handler.postDelayed(this::injectDirectAutoPlay, 5000);
-    }
-
-    private void injectDirectAutoPlay() {
-        if (destroyed || webView == null) return;
-
-        String script =
-                "(function(){try{" +
-                "if(!window.__MBOX_TV_V3_INSTALLED){window.__MBOX_TV_V3_INSTALLED=true;" +
-                "window.__mboxKick=function(){" +
-                "var start=document.getElementById('start'),layout=document.querySelector('.layoutHolder')," +
-                "screen=document.getElementById('screen-layout'),player=document.getElementById('player');" +
-                "if(layout)layout.style.setProperty('display','block','important');" +
-                "if(screen)screen.style.setProperty('display','block','important');" +
-                "if(!document.getElementById('__mbox_clean_css')){var st=document.createElement('style');st.id='__mbox_clean_css';st.textContent='#start{display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important}.layoutHolder,#screen-layout{display:block!important}';(document.head||document.documentElement).appendChild(st);}" +
-                "if(start){start.style.setProperty('display','none','important');start.style.setProperty('visibility','hidden','important');}" +
-                "try{if(typeof window.startVideo==='function')window.startVideo();}catch(e){}" +
-                "if(player){player.style.setProperty('display','block','important');player.setAttribute('playsinline','');player.autoplay=true;player.muted=true;" +
-                "var p=player.play();if(p&&p.catch)p.catch(function(){});}" +
-                "return !!(player||start);};" +
-                "try{if(window.jQuery){jQuery(document).off('fullscreenchange webkitfullscreenchange mozfullscreenchange MSFullscreenChange');jQuery('#start').off('click');}}catch(e){}" +
-                "try{new MutationObserver(function(){window.__mboxKick();}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}" +
-                "setInterval(function(){window.__mboxKick();},1000);}" +
-                "return window.__mboxKick&&window.__mboxKick()?'ready':'waiting';" +
-                "}catch(e){return 'error';}})();";
-
-        webView.evaluateJavascript(script, value -> {
-            if (destroyed) return;
-            if (value != null && value.contains("ready")) showPlayerSurface();
-        });
-    }
-
     private void scheduleReload(String message, long delay) {
         if (destroyed || reloadScheduled) return;
         reloadScheduled = true;
-        pageLoaded = false;
         showConnecting(message);
-        handler.postDelayed(this::reloadFromStart, delay);
-    }
-
-    private void reloadFromStart() {
-        if (destroyed) return;
-        reloadScheduled = false;
-        pageLoaded = false;
-        bootstrapDone = false;
-        playerNavigationScheduled = false;
-        if (webView != null) {
+        handler.postDelayed(() -> {
+            if (destroyed || webView == null) return;
+            reloadScheduled = false;
             webView.stopLoading();
-            webView.loadUrl("about:blank");
-        }
-        handler.postDelayed(this::startSmartConnection, 250);
-    }
-
-    private boolean isReachable(String address) {
-        HttpURLConnection conn = null;
-        try {
-            URL url = new URL(address);
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setInstanceFollowRedirects(true);
-            conn.setConnectTimeout(1600);
-            conn.setReadTimeout(1600);
-            conn.setRequestMethod("GET");
-            conn.setRequestProperty("Cache-Control", "no-cache");
-            int code = conn.getResponseCode();
-            return code >= 200 && code < 500;
-        } catch (Exception e) {
-            return false;
-        } finally {
-            if (conn != null) conn.disconnect();
-        }
-    }
-
-    private boolean hasNetwork() {
-        try {
-            ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
-            Network active = cm.getActiveNetwork();
-            if (active == null) return false;
-            NetworkCapabilities caps = cm.getNetworkCapabilities(active);
-            return caps != null && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR));
-        } catch (Exception e) {
-            return true;
-        }
+            webView.loadUrl(Prefs.getUrl(PlayerActivity.this).trim());
+        }, delay);
     }
 
     private void loadLogo() {
@@ -412,6 +194,7 @@ public class PlayerActivity extends Activity {
             defaultLogo.setVisibility(View.VISIBLE);
             return;
         }
+
         try {
             customLogo.setImageURI(Uri.parse(logoUri));
             customLogo.setVisibility(View.VISIBLE);
@@ -449,6 +232,7 @@ public class PlayerActivity extends Activity {
                 handler.postDelayed(openControlMenuRunnable, BACK_HOLD_MS);
                 return true;
             }
+
             if (event.getAction() == KeyEvent.ACTION_UP) {
                 handler.removeCallbacks(openControlMenuRunnable);
                 if (!backHeldTriggered) immersive();
@@ -456,16 +240,7 @@ public class PlayerActivity extends Activity {
             }
         }
 
-        if (event.getAction() == KeyEvent.ACTION_UP
-                && (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER
-                || event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
-            if (Prefs.getIframeMode(this)) {
-                webView.evaluateJavascript("(function(){try{var f=document.getElementById('tv');if(f&&f.contentDocument){var p=f.contentDocument.getElementById('player');if(p){p.play();return 'ok';}}}catch(e){}return 'no';})()", null);
-            } else {
-                injectDirectAutoPlay();
-            }
-        }
-
+        // All other keys go to the WebView/page exactly as in a normal browser.
         return super.dispatchKeyEvent(event);
     }
 
@@ -483,15 +258,18 @@ public class PlayerActivity extends Activity {
                 .setNegativeButton("ОТКАЗ", (d, which) -> immersive())
                 .create();
 
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            if (Prefs.getPin(this).equals(input.getText().toString())) {
-                dialog.dismiss();
-                showControlMenu();
-            } else {
-                Toast.makeText(this, "Грешен PIN", Toast.LENGTH_SHORT).show();
-                input.selectAll();
-            }
-        }));
+        dialog.setOnShowListener(d ->
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                    if (Prefs.getPin(this).equals(input.getText().toString())) {
+                        dialog.dismiss();
+                        showControlMenu();
+                    } else {
+                        Toast.makeText(this, "Грешен PIN", Toast.LENGTH_SHORT).show();
+                        input.selectAll();
+                    }
+                })
+        );
+
         dialog.setOnDismissListener(d -> immersive());
         dialog.show();
     }
@@ -512,7 +290,7 @@ public class PlayerActivity extends Activity {
                             openSetup();
                             break;
                         case 1:
-                            reloadFromStart();
+                            openConfiguredAddress();
                             break;
                         case 2:
                             exitApplication();
@@ -529,7 +307,6 @@ public class PlayerActivity extends Activity {
     private void exitApplication() {
         destroyed = true;
         handler.removeCallbacksAndMessages(null);
-        executor.shutdownNow();
 
         if (webView != null) {
             try {
@@ -538,7 +315,8 @@ public class PlayerActivity extends Activity {
                 webView.clearHistory();
                 webView.removeAllViews();
                 webView.destroy();
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
             webView = null;
         }
 
@@ -554,20 +332,21 @@ public class PlayerActivity extends Activity {
     protected void onResume() {
         super.onResume();
         immersive();
-        if (pageLoaded && !Prefs.getIframeMode(this)) scheduleDirectAutoPlayAttempts();
     }
 
     @Override
     protected void onDestroy() {
         destroyed = true;
         handler.removeCallbacksAndMessages(null);
-        executor.shutdownNow();
+
         if (webView != null) {
             try {
                 webView.stopLoading();
                 webView.destroy();
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
+
         super.onDestroy();
     }
 }
